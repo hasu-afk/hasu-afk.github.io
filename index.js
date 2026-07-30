@@ -1,144 +1,56 @@
-// Fires once the page's HTML has finished loading
 document.addEventListener('DOMContentLoaded', function () {
 
+    // ============================
+    // BACKGROUND MUSIC
+    // ============================
     const music = document.getElementById('bg-music');
-    const toggleBtn = document.getElementById('music-toggle');
-    if (!music || !toggleBtn) {
-        return;
-    }
-
+    const musicBtn = document.getElementById('music-toggle');
     music.volume = 0.4;
 
-    // tracks whether the music has ever been started
-    var hasStarted = false;
-
-    function updateButtonLabel() {
-        if (music.paused) {
-            toggleBtn.textContent = '🔇 Music';
-        } else {
-            toggleBtn.textContent = '🔈 Music';
-        }
-    }
-
-    function startMusic() {
-        if (hasStarted) {
-            return;
-        }
-        hasStarted = true;
-        music.play();
-        updateButtonLabel();
-    }
-
-    // start music on the first interaction anywhere on the page
-    var startEvents = ['click', 'keydown', 'touchstart'];
-    for (let i = 0; i < startEvents.length; i++) {
-        document.addEventListener(startEvents[i], startMusic, { once: true });
-    }
-
-    // manual toggle button
-    toggleBtn.addEventListener('click', function (e) {
-        e.stopPropagation(); // don't also trigger the page-wide startMusic listener
+    musicBtn.addEventListener('click', function () {
         if (music.paused) {
             music.play();
-            hasStarted = true;
+            musicBtn.textContent = '🔈 Music';
         } else {
             music.pause();
+            musicBtn.textContent = '🔇 Music';
         }
-        updateButtonLabel();
     });
 
-    music.addEventListener('play', updateButtonLabel);
-    music.addEventListener('pause', updateButtonLabel);
-});
-// Music track: Donut by Lukrembo
-//Source: https://freetouse.com/music
-//https://freetouse.com/music/lukrembo/donut
-//No Copyright Vlog Music for Videos
-
-// PAGE MANAGEMENT
-// lay everything out in advance, hide all, display only on demand
-document.addEventListener('DOMContentLoaded', function () {
-
+    // ============================
+    // PAGE NAVIGATION
+    // ============================
     const navLinks = document.querySelectorAll('.nav1 a');
     const pages = document.querySelectorAll('.main article');
 
-    var defaultPageId = null;
-    if (pages.length > 0) {
-        defaultPageId = pages[0].id;
-    }
-
-    // quick lookup of pages by id
-    const pageMap = {};
-    for (let page of pages) {
-        pageMap[page.id] = page;
+    function hideAllPages() {
+        for (let page of pages) {
+            page.style.display = 'none';
+        }
     }
 
     function showPage(pageId) {
-        // fall back to the default page if the id doesn't match anything
-        if (!pageMap[pageId]) {
-            pageId = defaultPageId;
+        hideAllPages();
+        const target = document.getElementById(pageId);
+        if (target) {
+            target.style.display = 'block';
         }
-
-        // hide every page, then reveal only the target one
-        for (let page of pages) {
-            page.hidden = page.id !== pageId;
-        }
-
-        // sync the "active" class on the nav links
-        for (let link of navLinks) {
-            let linkId = link.getAttribute('href').replace('#', '');
-            if (linkId === pageId) {
-                link.classList.add('active');
-            } else {
-                link.classList.remove('active');
-            }
-        }
-
-        // keep the main content area scrolled to the top on page change
-        window.scrollTo({ top: document.querySelector('.main').offsetTop, behavior: 'smooth' });
-    }
-
-    function handleNavClick(event) {
-        var href = event.currentTarget.getAttribute('href');
-
-        // only intercept internal #anchor links; let external links behave normally
-        if (href.indexOf('#') !== 0) {
-            return;
-        }
-
-        event.preventDefault();
-        var pageId = href.replace('#', '');
-
-        // update the URL hash without a jarring jump-scroll
-        history.pushState(null, '', href);
-        showPage(pageId);
     }
 
     for (let link of navLinks) {
-        link.addEventListener('click', handleNavClick);
+        link.addEventListener('click', function (event) {
+            event.preventDefault();
+            const pageId = link.getAttribute('href').replace('#', '');
+            showPage(pageId);
+        });
     }
 
-    // support browser Back/Forward buttons
-    window.addEventListener('popstate', function () {
-        var pageId = window.location.hash.replace('#', '');
-        if (!pageId) {
-            pageId = defaultPageId;
-        }
-        showPage(pageId);
-    });
+    // show the first page when the site first loads
+    showPage(pages[0].id);
 
-    // initial page load: honor a hash in the URL, otherwise show the first page
-    var initialPageId = window.location.hash.replace('#', '');
-    if (!initialPageId) {
-        initialPageId = defaultPageId;
-    }
-    showPage(initialPageId);
-});
-
-// RECYCLING SORTING GAME
-// drag each item into its matching bin
-document.addEventListener('DOMContentLoaded', function () {
-
+    // ============================
+    // RECYCLING SORTING GAME
+    // ============================
     const ITEMS = [
         { id: 'cardboard', icon: '📦', bin: 'paper',   binLabel: 'Paper' },
         { id: 'bottle',    icon: '🧴', bin: 'plastic', binLabel: 'Plastic' },
@@ -149,37 +61,30 @@ document.addEventListener('DOMContentLoaded', function () {
 
     const itemsEl = document.getElementById('game-items');
     const binsEl = document.getElementById('game-bins');
-
-    // if the game markup isn't on the page, don't run any of this
-    if (!itemsEl || !binsEl) {
-        return;
-    }
-
     const scoreEl = document.getElementById('game-score');
     const attemptsEl = document.getElementById('game-attempts');
     const winMsgEl = document.getElementById('game-win-msg');
     const resetBtn = document.getElementById('game-reset');
 
-    // feedback sounds - if these files are missing, play() just fails quietly
     const correctAudio = new Audio('Audio/correct.mp3');
     const wrongAudio = new Audio('Audio/wrong.mp3');
 
     var score = 0;
     var attempts = 0;
-    var matchedIds = []; // ids of items already placed in the correct bin
+    var matchedIds = [];
 
     // info about whatever item is currently being dragged
-    var dragEl = null;
-    var dragItem = null;
-    var dragOffsetX = 0;
-    var dragOffsetY = 0;
+    var draggedItem = null;
+    var draggedEl = null;
+    var offsetX = 0;
+    var offsetY = 0;
 
     // pick a random whole number between min and max
     function GetRandom(min, max) {
         return Math.round(Math.random() * (max - min)) + min;
     }
 
-    // return a shuffled copy of an array
+    // shuffle an array into a random new order
     function shuffle(arr) {
         var copy = [];
         for (let i = 0; i < arr.length; i++) {
@@ -208,200 +113,145 @@ document.addEventListener('DOMContentLoaded', function () {
         attemptsEl.textContent = attempts;
     }
 
-    function clearBinHighlights() {
-        var bins = binsEl.querySelectorAll('.game-bin');
-        for (let bin of bins) {
-            bin.classList.remove('over');
-        }
+    function createItemElement(item) {
+        const el = document.createElement('div');
+        el.className = 'game-item';
+        el.textContent = item.icon;
+        el.id = 'game-item-' + item.id;
+
+        el.addEventListener('mousedown', function (event) {
+            startDrag(event, el, item);
+        });
+
+        return el;
     }
 
-    // find which bin (if any) contains the given page coordinate
-    function findBinAtPoint(x, y) {
+    function createBinElement(binId, binLabel) {
+        const el = document.createElement('div');
+        el.className = 'game-bin';
+        el.binId = binId;
+        el.innerHTML = '<span class="bin-icon">🗑️</span><span>' + binLabel + '</span>';
+        return el;
+    }
+
+    function startDrag(event, el, item) {
+        if (isMatched(item.id)) {
+            return;
+        }
+        event.preventDefault();
+
+        draggedItem = item;
+        draggedEl = el;
+
+        var rect = el.getBoundingClientRect();
+        offsetX = event.clientX - rect.left;
+        offsetY = event.clientY - rect.top;
+
+        el.style.position = 'fixed';
+        el.style.left = rect.left + 'px';
+        el.style.top = rect.top + 'px';
+        el.classList.add('dragging');
+
+        document.addEventListener('mousemove', moveDrag);
+        document.addEventListener('mouseup', endDrag);
+    }
+
+    function moveDrag(event) {
+        draggedEl.style.left = (event.clientX - offsetX) + 'px';
+        draggedEl.style.top = (event.clientY - offsetY) + 'px';
+    }
+
+    function endDrag(event) {
+        document.removeEventListener('mousemove', moveDrag);
+        document.removeEventListener('mouseup', endDrag);
+
+        draggedEl.classList.remove('dragging');
+
+        var droppedBin = findBinUnderPoint(event.clientX, event.clientY);
+        checkAnswer(draggedEl, draggedItem, droppedBin);
+
+        draggedEl = null;
+        draggedItem = null;
+    }
+
+    function findBinUnderPoint(x, y) {
         var bins = binsEl.querySelectorAll('.game-bin');
         for (let bin of bins) {
-            let r = bin.getBoundingClientRect();
-            if (x >= r.left && x <= r.right && y >= r.top && y <= r.bottom) {
+            let rect = bin.getBoundingClientRect();
+            if (x > rect.left && x < rect.right && y > rect.top && y < rect.bottom) {
                 return bin;
             }
         }
         return null;
     }
 
-    function startDrag(evt, el, item) {
-        if (isMatched(item.id)) {
-            return;
-        }
-        evt.preventDefault();
-
-        var rect = el.getBoundingClientRect();
-        dragEl = el;
-        dragItem = item;
-        dragOffsetX = evt.clientX - rect.left;
-        dragOffsetY = evt.clientY - rect.top;
-
-        // lock in the current size, then switch to fixed positioning so
-        // it can be moved freely with left/top
-        el.style.width = rect.width + "px";
-        el.style.height = rect.height + "px";
-        el.style.left = rect.left + "px";
-        el.style.top = rect.top + "px";
-        el.style.position = "fixed";
-        el.classList.add("dragging");
-
-        document.addEventListener("mousemove", onDragMove);
-        document.addEventListener("mouseup", onDragEnd);
-    }
-
-    function onDragMove(evt) {
-        if (!dragEl) {
-            return;
-        }
-
-        dragEl.style.left = (evt.clientX - dragOffsetX) + "px";
-        dragEl.style.top = (evt.clientY - dragOffsetY) + "px";
-
-        // highlight whichever bin the mouse is currently over
-        var hoverBin = findBinAtPoint(evt.clientX, evt.clientY);
-        var bins = binsEl.querySelectorAll(".game-bin");
-        for (let bin of bins) {
-            if (bin === hoverBin) {
-                bin.classList.add("over");
-            } else {
-                bin.classList.remove("over");
-            }
-        }
-    }
-
-    function onDragEnd(evt) {
-        if (!dragEl) {
-            return;
-        }
-
-        document.removeEventListener("mousemove", onDragMove);
-        document.removeEventListener("mouseup", onDragEnd);
-
-        var el = dragEl;
-        var item = dragItem;
-        el.classList.remove("dragging");
-
-        var dropBin = findBinAtPoint(evt.clientX, evt.clientY);
-        clearBinHighlights();
-        handleDrop(el, item, dropBin);
-
-        dragEl = null;
-        dragItem = null;
-    }
-
-    function handleDrop(el, item, bin) {
+    function checkAnswer(el, item, bin) {
         attempts++;
 
-        if (bin && item.bin === bin.binId) {
-            // correct bin!
+        if (bin && bin.binId === item.bin) {
             score += 10;
             matchedIds.push(item.id);
-            correctAudio.currentTime = 0;
+            el.classList.add('placed');
+            bin.classList.add('filled', 'correct-flash');
             correctAudio.play();
-
-            el.classList.add("placed");
-            bin.classList.add("filled", "correct-flash");
             setTimeout(function () {
-                bin.classList.remove("correct-flash");
+                bin.classList.remove('correct-flash');
             }, 500);
 
             if (matchedIds.length === ITEMS.length) {
-                winMsgEl.style.display = "block";
+                winMsgEl.style.display = 'block';
             }
         } else {
-            // wrong bin, or dropped outside any bin - give a little shake
-            wrongAudio.currentTime = 0;
             wrongAudio.play();
-
-            el.classList.add("wrong-shake");
+            el.classList.add('wrong-shake');
             setTimeout(function () {
-                el.classList.remove("wrong-shake");
+                el.classList.remove('wrong-shake');
             }, 400);
-
-            if (bin) {
-                bin.classList.add("wrong-flash");
-                setTimeout(function () {
-                    bin.classList.remove("wrong-flash");
-                }, 500);
-            }
         }
 
-        // release the fixed positioning so the item snaps back into its
-        // normal spot (or disappears, since "placed" hides it via CSS)
-        el.style.position = "";
-        el.style.left = "";
-        el.style.top = "";
-        el.style.width = "";
-        el.style.height = "";
+        // put the item back into the normal page layout
+        el.style.position = '';
+        el.style.left = '';
+        el.style.top = '';
 
         updateScoreboard();
     }
 
-    function createDraggableItem(item) {
-        const el = document.createElement("div");
-        el.className = "game-item";
-        el.textContent = item.icon;
-        el.id = "game-item-" + item.id;
-
-        el.addEventListener("mousedown", function (evt) {
-            startDrag(evt, el, item);
-        });
-
-        return el;
-    }
-
-    function createBin(bin) {
-        const el = document.createElement("div");
-        el.className = "game-bin";
-        el.binId = bin.id; // store the bin's id directly on the element
-        el.innerHTML = "<span class=\"bin-icon\">🗑️</span><span>" + bin.label + "</span>";
-        return el;
-    }
-
-    // build a de-duplicated list of bins from the items' bin categories
-    function buildUniqueBins() {
-        var uniqueBins = [];
-        for (let i = 0; i < ITEMS.length; i++) {
-            let alreadyAdded = false;
-            for (let j = 0; j < uniqueBins.length; j++) {
-                if (uniqueBins[j].id === ITEMS[i].bin) {
-                    alreadyAdded = true;
-                }
-            }
-            if (!alreadyAdded) {
-                uniqueBins.push({ id: ITEMS[i].bin, label: ITEMS[i].binLabel });
-            }
-        }
-        return uniqueBins;
-    }
-
-    function initGame() {
+    function startGame() {
         score = 0;
         attempts = 0;
         matchedIds = [];
-        dragEl = null;
-        dragItem = null;
         updateScoreboard();
-        winMsgEl.style.display = "none";
+        winMsgEl.style.display = 'none';
 
-        itemsEl.innerHTML = "";
-        binsEl.innerHTML = "";
+        itemsEl.innerHTML = '';
+        binsEl.innerHTML = '';
 
         var shuffledItems = shuffle(ITEMS);
         for (let i = 0; i < shuffledItems.length; i++) {
-            itemsEl.appendChild(createDraggableItem(shuffledItems[i]));
+            itemsEl.appendChild(createItemElement(shuffledItems[i]));
         }
 
-        var shuffledBins = shuffle(buildUniqueBins());
-        for (let i = 0; i < shuffledBins.length; i++) {
-            binsEl.appendChild(createBin(shuffledBins[i]));
+        var binIds = [];
+        for (let i = 0; i < ITEMS.length; i++) {
+            if (binIds.indexOf(ITEMS[i].bin) === -1) {
+                binIds.push(ITEMS[i].bin);
+            }
+        }
+
+        var shuffledBinIds = shuffle(binIds);
+        for (let i = 0; i < shuffledBinIds.length; i++) {
+            var binId = shuffledBinIds[i];
+            var binLabel = '';
+            for (let j = 0; j < ITEMS.length; j++) {
+                if (ITEMS[j].bin === binId) {
+                    binLabel = ITEMS[j].binLabel;
+                }
+            }
+            binsEl.appendChild(createBinElement(binId, binLabel));
         }
     }
 
-    resetBtn.addEventListener("click", initGame);
-
-    initGame();
+    resetBtn.addEventListener('click', startGame);
+    startGame();
 });

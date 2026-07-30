@@ -143,10 +143,6 @@ article {
     scroll-margin-top: 20px;
 }
 
-.main article[hidden] {
-    display: none;
-}
-
 /* ===========================
    IMAGES
 =========================== */
@@ -221,7 +217,7 @@ img {
     font-size: 28px;
     cursor: grab;
     user-select: none;
-    touch-action: none; /* stop the browser from scrolling the page while dragging on touch */
+    touch-action: none;
     transition: transform 0.15s, box-shadow 0.15s;
 }
 
@@ -229,8 +225,6 @@ img {
     cursor: grabbing;
 }
 
-/* The item being actively dragged: lifted above everything else,
-   following the pointer with no transition lag */
 .game-item.dragging {
     cursor: grabbing;
     transform: scale(1.08);
@@ -338,26 +332,6 @@ img {
     color: white;
     text-align: center;
     padding: 15px;
-}
-
-/* ===========================
-   TABLET (769px - 1024px)
-=========================== */
-
-@media (max-width: 1024px) {
-
-    .content {
-        flex-wrap: wrap;
-    }
-
-    .nav1,
-    .nav2 {
-        flex: 1 1 45%;
-    }
-
-    .main {
-        flex: 1 1 100%;
-    }
 }
 
 /* ===========================
