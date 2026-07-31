@@ -35,6 +35,18 @@ document.addEventListener('DOMContentLoaded', function () {
         if (target) {
             target.style.display = 'block';
         }
+        setActiveLink(pageId);
+    }
+
+    function setActiveLink(pageId) {
+        for (let link of navLinks) {
+            const linkPageId = link.getAttribute('href').replace('#', '');
+            if (linkPageId === pageId) {
+                link.classList.add('active');
+            } else {
+                link.classList.remove('active');
+            }
+        }
     }
 
     for (let link of navLinks) {
@@ -55,8 +67,7 @@ document.addEventListener('DOMContentLoaded', function () {
         { id: 'cardboard', icon: '📦', bin: 'paper',   binLabel: 'Paper' },
         { id: 'bottle',    icon: '🧴', bin: 'plastic', binLabel: 'Plastic' },
         { id: 'jar',       icon: '🫙', bin: 'glass',   binLabel: 'Glass' },
-        { id: 'can',       icon: '🥫', bin: 'metal',   binLabel: 'Metal' },
-        { id: 'banana',    icon: '🍌', bin: 'compost', binLabel: 'Compost' }
+        { id: 'can',       icon: '🥫', bin: 'metal',   binLabel: 'Metal' }
     ];
 
     const itemsEl = document.getElementById('game-items');
@@ -65,6 +76,7 @@ document.addEventListener('DOMContentLoaded', function () {
     const attemptsEl = document.getElementById('game-attempts');
     const winMsgEl = document.getElementById('game-win-msg');
     const resetBtn = document.getElementById('game-reset');
+    const timerEl = document.getElementById('game-timer');
 
     const correctAudio = new Audio('Audio/correct.mp3');
     const wrongAudio = new Audio('Audio/wrong.mp3');
@@ -72,6 +84,8 @@ document.addEventListener('DOMContentLoaded', function () {
     var score = 0;
     var attempts = 0;
     var matchedIds = [];
+    var elapsedSeconds = 0;
+    var timerIntervalId = null;
 
     // info about whatever item is currently being dragged
     var draggedItem = null;
@@ -111,6 +125,40 @@ document.addEventListener('DOMContentLoaded', function () {
     function updateScoreboard() {
         scoreEl.textContent = score;
         attemptsEl.textContent = attempts;
+    }
+
+    // ============================
+    // TIMER
+    // ============================
+    function formatTime(totalSeconds) {
+        var mins = Math.floor(totalSeconds / 60);
+        var secs = totalSeconds % 60;
+        var minsStr = mins < 10 ? '0' + mins : '' + mins;
+        var secsStr = secs < 10 ? '0' + secs : '' + secs;
+        return minsStr + ':' + secsStr;
+    }
+
+    function updateTimerDisplay() {
+        if (timerEl) {
+            timerEl.textContent = formatTime(elapsedSeconds);
+        }
+    }
+
+    function startTimer() {
+        stopTimer(); // clear any running timer first
+        elapsedSeconds = 0;
+        updateTimerDisplay();
+        timerIntervalId = setInterval(function () {
+            elapsedSeconds++;
+            updateTimerDisplay();
+        }, 1000);
+    }
+
+    function stopTimer() {
+        if (timerIntervalId) {
+            clearInterval(timerIntervalId);
+            timerIntervalId = null;
+        }
     }
 
     function createItemElement(item) {
@@ -199,6 +247,17 @@ document.addEventListener('DOMContentLoaded', function () {
             }, 500);
 
             if (matchedIds.length === ITEMS.length) {
+                stopTimer();
+
+                //reward speed: divide score by time taken, then scale back up
+                //(use at least 1 second so we never divide by zero)
+                var timeForScore = elapsedSeconds > 0 ? elapsedSeconds : 1;
+                var finalScore = Math.round((score / timeForScore) * 100);
+
+                winMsgEl.innerHTML =
+                    'You sorted everything in ' + formatTime(elapsedSeconds) + '!<br>' +
+                    'Score: ' + score + '<br>' +
+                    'Final score: ' + finalScore;
                 winMsgEl.style.display = 'block';
             }
         } else {
@@ -223,6 +282,7 @@ document.addEventListener('DOMContentLoaded', function () {
         matchedIds = [];
         updateScoreboard();
         winMsgEl.style.display = 'none';
+        startTimer();
 
         itemsEl.innerHTML = '';
         binsEl.innerHTML = '';

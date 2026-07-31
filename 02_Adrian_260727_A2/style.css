@@ -70,7 +70,6 @@ body {
 
 .main {
     flex: 3;
-    background: url(Images/recycling-main.png) no-repeat center center;
     background-size: cover;
 }
 
